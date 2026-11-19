@@ -129,6 +129,18 @@ M3_RIPPLE_FS = os.path.join(glsl_path, "ripple", "ripple.glsl")
 RIPPLE_FS_STRING = None
 
 
+def get_ripple_fs() -> str:
+    """Return the M3 ripple fragment shader source (read once, then cached)."""
+
+    global RIPPLE_FS_STRING
+
+    if RIPPLE_FS_STRING is None:
+        with open(M3_RIPPLE_FS, "r", encoding="utf-8") as shader_file:
+            RIPPLE_FS_STRING = "$HEADER$\n" + shader_file.read()
+
+    return RIPPLE_FS_STRING
+
+
 class CommonRipple:
     """Base class for ripple effect."""
 
@@ -698,8 +710,12 @@ class M3CommonRipple(CommonRipple):
         self._phase = 0.0
         self.ripple_pos = (0, 0)
         # TODO: Remove group also deallocates it from mem?
-        self.fbo = Fbo(size=[50] * 2, group="m3_ripple_behavior")
-        self.set_shader(self.fbo)
+        # Give the shader to Fbo() at creation. Assigning fbo.shader.fs after
+        # the Fbo exists crashes some Adreno drivers on the first draw
+        # (#1900; same fix as kivy/kivy#8098 for BoxShadow).
+        self.fbo = Fbo(
+            size=[50] * 2, group="m3_ripple_behavior", fs=get_ripple_fs()
+        )
 
         with self.fbo:
             ClearColor(0, 0, 0, 0)
@@ -719,13 +735,8 @@ class M3CommonRipple(CommonRipple):
         return max(width, 1.0), max(height, 1.0)
 
     def set_shader(self, obj):
-        global RIPPLE_FS_STRING
-
-        if RIPPLE_FS_STRING is None:
-            with open(M3_RIPPLE_FS, "r", encoding="utf-8") as shader_file:
-                RIPPLE_FS_STRING = "$HEADER$\n" + shader_file.read()
-
-        obj.shader.fs = RIPPLE_FS_STRING
+        # Not used by init_fbos any more (see there); kept for compatibility.
+        obj.shader.fs = get_ripple_fs()
 
     _start_event = None
 
